@@ -189,7 +189,7 @@ with col_a:
         color_discrete_sequence=["#0d6efd"],
         text_auto=".2s",
     )
-    fig.update_layout(margin=dict(t=40, b=0))
+    fig.update_layout(margin=dict(t=40, b=0), xaxis_type="category")  # ano como rótulo, sem 2,022.5
     st.plotly_chart(fig, use_container_width=True)
 
 with col_b:
@@ -217,13 +217,15 @@ with col_c:
         color_discrete_sequence=["#dc3545"],
         markers=True,
     )
-    fig.update_layout(margin=dict(t=40, b=0))
+    fig.update_layout(margin=dict(t=40, b=0), xaxis_type="category")  # ano como rótulo, sem 2,022.5
     st.plotly_chart(fig, use_container_width=True)
 
 with col_d:
     # Diárias vs Passagens vs Outros
     if "valor_diarias" in df_f.columns and "valor_passagens" in df_f.columns:
         outros = (df_f["valor_total"] - df_f["valor_diarias"] - df_f["valor_passagens"]).clip(lower=0).sum()
+        # a subtração deixa resíduo de ponto flutuante (ex.: 2e-15); abaixo de 1 centavo é zero
+        outros = outros if outros >= 0.01 else 0.0
         breakdown = pd.DataFrame({
             "Tipo": ["Diárias", "Passagens", "Outros"],
             "Valor": [df_f["valor_diarias"].sum(), df_f["valor_passagens"].sum(), outros],

@@ -23,6 +23,17 @@ def _converter_real(serie):
     )
 
 
+PREPOSICOES = {"Da", "De", "Do", "Das", "Dos", "E", "Em", "Para"}
+
+
+def _nome_proprio(serie):
+    """'MINISTÉRIO DA SAÚDE' -> 'Ministério da Saúde' (preposições em minúsculo)."""
+    def ajustar(nome):
+        palavras = str(nome).strip().title().split()
+        return " ".join(p.lower() if i > 0 and p in PREPOSICOES else p for i, p in enumerate(palavras))
+    return serie.map(ajustar)
+
+
 def transformar_dados(df):
     print("Iniciando transformação dos dados...")
     print(f"Colunas disponíveis: {df.columns.tolist()}")
@@ -60,10 +71,10 @@ def transformar_dados(df):
 
     # ---- Normaliza órgão ----
     if "orgao" in df.columns:
-        df["orgao"] = df["orgao"].astype(str).str.strip().str.title()
+        df["orgao"] = _nome_proprio(df["orgao"])
     elif "orgao_pagador" in df.columns:
         # Fallback: usa o órgão pagador se não tiver o superior
-        df["orgao"] = df["orgao_pagador"].astype(str).str.strip().str.title()
+        df["orgao"] = _nome_proprio(df["orgao_pagador"])
 
     # ---- Normaliza tipo de pagamento ----
     if "tipo_pagamento" in df.columns:
@@ -85,9 +96,11 @@ def transformar_dados(df):
             )
 
             # Adiciona breakdown diárias vs passagens
-            for tipo in ["DIÁRIA", "PASSAGEM"]:
-                sub = df[df["tipo_pagamento"] == tipo].groupby("id_processo")["valor"].sum()
-                col_nome = "valor_diarias" if tipo == "DIÁRIA" else "valor_passagens"
+            # comparo pelo começo da palavra pra aceitar singular e plural
+            # ("DIÁRIA"/"DIÁRIAS", "PASSAGEM"/"PASSAGENS") e grafia sem acento
+            tipo_normalizado = df["tipo_pagamento"].str.replace("Á", "A", regex=False)
+            for prefixo, col_nome in [("DIARIA", "valor_diarias"), ("PASSAGE", "valor_passagens")]:
+                sub = df[tipo_normalizado.str.startswith(prefixo)].groupby("id_processo")["valor"].sum()
                 pivot = pivot.merge(sub.rename(col_nome), on="id_processo", how="left")
                 pivot[col_nome] = pivot[col_nome].fillna(0)
 
@@ -101,7 +114,7 @@ def transformar_dados(df):
             )
 
     # ---- Adiciona coluna mes (não temos data, usa None) ----
-    # ponytail: o arquivo de pagamentos não tem data da viagem, só o ano
+    # o arquivo de pagamentos não tem a data da viagem, só o ano
     df["mes"] = None
 
     print(f"\nTransformação concluída: {len(df):,} viagens únicas")
